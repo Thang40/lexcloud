@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Document - LexCloud{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-body p-5">
+                <h2 class="card-title mb-4">Upload Legal Document</h2>
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select File (PDF or Image)</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.tiff" required>
+                        <small class="text-muted">Supported formats: PDF, PNG, JPG, JPEG, TIFF</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="contract_type" class="form-label">Contract Type</label>
+                        <select class="form-select" id="contract_type" name="contract_type" required>
+                            <option value="">-- Select a type --</option>
+                            <option value="NDA">Non-Disclosure Agreement (NDA)</option>
+                            <option value="Service">Service Agreement</option>
+                            <option value="Employment">Employment Contract</option>
+                            <option value="Purchase">Purchase Agreement</option>
+                            <option value="Lease">Lease Agreement</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="client_name" class="form-label">Client/Party Name</label>
+                        <input type="text" class="form-control" id="client_name" name="client_name" placeholder="e.g., Acme Corporation" required>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('documents.list_documents') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Upload Document</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
