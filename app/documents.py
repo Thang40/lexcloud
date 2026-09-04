@@ -32,7 +32,7 @@ def upload():
             s3_client = get_s3_client()
             s3_client.upload_fileobj(
                 file.stream,
-                current_app.config['S3_BUCKET_NAME'],
+                current_app.config['S3_INPUT_BUCKET'],
                 s3_key,
                 ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'}
             )
@@ -103,7 +103,7 @@ def view_document(document_id):
             return redirect(url_for('documents.list_documents'))
 
         s3_client = get_s3_client()
-        file_obj = s3_client.get_object(Bucket=current_app.config['S3_BUCKET_NAME'], Key=doc['s3_key'])
+        file_obj = s3_client.get_object(Bucket=current_app.config['S3_INPUT_BUCKET'], Key=doc['s3_key'])
         file_data = file_obj['Body'].read()
 
         return send_file(

@@ -62,28 +62,34 @@ cp .env.example .env
 
 5. Edit `.env` with your AWS configuration:
 ```
-FLASK_SECRET_KEY=your-secret-key-here
 AWS_REGION=us-east-1
-S3_BUCKET_NAME=lexcloud-documents-storage
-DYNAMODB_USERS_TABLE=users
-DYNAMODB_DOCUMENTS_TABLE=documents
+S3_INPUT_BUCKET=lexcloud-documents-input-thang123
+S3_OUTPUT_BUCKET=lexcloud-documents-output-thang123
+USERS_TABLE=users
+DOCUMENTS_TABLE=documents
+FLASK_ENV=development
+FLASK_SECRET_KEY=your-secret-key-12345-change-in-production
 ```
 
 ### AWS Resources Required
 
 Before running the app, create these resources in AWS:
 
-**S3 Bucket:**
-- Name: `lexcloud-documents-storage` (or your custom name)
-- Block all public access enabled
-- Bucket policy allows your IAM user to upload/download
+**S3 Buckets:**
+1. Input bucket (e.g., `lexcloud-documents-input-thang123`):
+   - Block all public access enabled
+   - Lambda has permission to read from this bucket
+   
+2. Output bucket (e.g., `lexcloud-documents-output-thang123`):
+   - Block all public access enabled
+   - Lambda writes processed documents here
 
 **DynamoDB Tables:**
 
 1. `users` table:
    - Partition Key: `email` (String)
 
-2. `documents` table:
+2. `doc` table:
    - Partition Key: `document_id` (String)
 
 ### Running the App
@@ -136,11 +142,13 @@ Lambda Function ← Async document processing
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `FLASK_SECRET_KEY` | Flask session secret | `your-secret-key` |
+| `FLASK_SECRET_KEY` | Flask session secret | `your-secret-key-12345` |
+| `FLASK_ENV` | Flask environment | `development` or `production` |
 | `AWS_REGION` | AWS region | `us-east-1` |
-| `S3_BUCKET_NAME` | S3 bucket for documents | `lexcloud-documents-storage` |
-| `DYNAMODB_USERS_TABLE` | DynamoDB users table name | `users` |
-| `DYNAMODB_DOCUMENTS_TABLE` | DynamoDB documents table name | `documents` |
+| `S3_INPUT_BUCKET` | S3 input bucket for uploads | `lexcloud-documents-input-thang123` |
+| `S3_OUTPUT_BUCKET` | S3 output bucket for processed docs | `lexcloud-documents-output-thang123` |
+| `USERS_TABLE` | DynamoDB users table name | `users` |
+| `DOCUMENTS_TABLE` | DynamoDB documents table name | `doc` |
 
 ## Development Notes
 

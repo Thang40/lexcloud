@@ -6,7 +6,8 @@ from datetime import datetime
 s3_client = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
 
-DOCUMENTS_TABLE = os.getenv('DYNAMODB_DOCUMENTS_TABLE', 'documents')
+DOCUMENTS_TABLE = os.getenv('DOCUMENTS_TABLE', 'doc')
+S3_OUTPUT_BUCKET = os.getenv('S3_OUTPUT_BUCKET')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 
 def lambda_handler(event, context):

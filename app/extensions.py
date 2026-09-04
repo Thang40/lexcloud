@@ -18,8 +18,8 @@ def get_dynamodb_resource():
 
 def get_users_table():
     dynamodb = get_dynamodb_resource()
-    return dynamodb.Table(current_app.config['DYNAMODB_USERS_TABLE'])
+    return dynamodb.Table(current_app.config['USERS_TABLE'])
 
 def get_documents_table():
     dynamodb = get_dynamodb_resource()
-    return dynamodb.Table(current_app.config['DYNAMODB_DOCUMENTS_TABLE'])
+    return dynamodb.Table(current_app.config['DOCUMENTS_TABLE'])
