@@ -37,10 +37,9 @@
 
 {% block extra_js %}
 <script>
-    fetch('{{ url_for("analytics.analytics_data") }}')
+    fetch('{{ url_for("analytics_data") }}')
         .then(response => response.json())
         .then(data => {
-            // Contract Type Chart
             const ctxContractType = document.getElementById('contractTypeChart').getContext('2d');
             new Chart(ctxContractType, {
                 type: 'doughnut',
@@ -68,7 +67,6 @@
                 }
             });
 
-            // Monthly Chart
             const ctxMonthly = document.getElementById('monthlyChart').getContext('2d');
             new Chart(ctxMonthly, {
                 type: 'line',

@@ -32,29 +32,29 @@
                 <ul class="navbar-nav ms-auto">
                     {% if session.get('email') %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('documents.upload') }}">Upload</a>
+                        <a class="nav-link" href="{{ url_for('upload') }}">Upload</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('documents.list_documents') }}">Documents</a>
+                        <a class="nav-link" href="{{ url_for('list_documents') }}">Documents</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('analytics.analytics') }}">Analytics</a>
+                        <a class="nav-link" href="{{ url_for('analytics') }}">Analytics</a>
                     </li>
                     <li class="nav-item">
                         <span class="nav-link text-muted">{{ session['email'] }}</span>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                     </li>
                     {% else %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
+                        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('auth.register') }}">Register</a>
+                        <a class="nav-link" href="{{ url_for('register') }}">Register</a>
                     </li>
                     {% endif %}
                 </ul>

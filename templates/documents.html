@@ -6,7 +6,7 @@
 <div class="row mb-4">
     <div class="col-md-12">
         <h2 class="mb-4">My Documents</h2>
-        <a href="{{ url_for('documents.upload') }}" class="btn btn-success">+ Upload New Document</a>
+        <a href="{{ url_for('upload') }}" class="btn btn-success">+ Upload New Document</a>
     </div>
 </div>
 
@@ -73,7 +73,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('documents.view_document', document_id=doc.document_id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                            <a href="{{ url_for('view_document', document_id=doc.document_id) }}" class="btn btn-sm btn-outline-primary">View</a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -82,7 +82,7 @@
         </div>
         {% else %}
         <div class="alert alert-info text-center" role="alert">
-            <p class="mb-0">No documents found. <a href="{{ url_for('documents.upload') }}">Upload your first document</a></p>
+            <p class="mb-0">No documents found. <a href="{{ url_for('upload') }}">Upload your first document</a></p>
         </div>
         {% endif %}
     </div>
