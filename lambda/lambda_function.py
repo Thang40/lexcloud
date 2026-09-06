@@ -12,15 +12,25 @@ AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 
 def lambda_handler(event, context):
     """
-    S3-triggered Lambda function to process uploaded documents.
+    Process uploaded documents from S3 or API Gateway.
     Extracts metadata and updates DynamoDB document status.
 
-    Expected S3 event structure: ObjectCreated event from S3 bucket.
-    Deployment: Connect to S3 ObjectCreated:* event via S3 bucket notifications.
+    Handles both direct S3 notifications and API Gateway requests with JSON body.
     """
 
     try:
-        records = event.get('Records', [])
+        # Parse records from event body if it's a string (API Gateway), otherwise direct (S3)
+        if isinstance(event.get('body'), str):
+            body = json.loads(event['body'])
+            records = body.get('Records', [])
+        else:
+            records = event.get('Records', [])
+
+        if not records:
+            return {
+                'statusCode': 400,
+                'body': json.dumps('Error: No Records found in event')
+            }
 
         for record in records:
             bucket = record['s3']['bucket']['name']
