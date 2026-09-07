@@ -3,88 +3,84 @@
 {% block title %}Documents - LexCloud{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-12">
-        <h2 class="mb-4">My Documents</h2>
-        <a href="{{ url_for('upload') }}" class="btn btn-success">+ Upload New Document</a>
-    </div>
+<div class="welcome-section">
+    <h1 class="welcome-title">Your Documents</h1>
+    <p class="welcome-subtitle">View and manage all your uploaded documents</p>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Search & Filter</h5>
-                <form method="GET" class="row g-3">
-                    <div class="col-md-4">
-                        <label for="contract_type_filter" class="form-label">Contract Type</label>
-                        <select class="form-select" id="contract_type_filter" name="contract_type">
-                            <option value="">-- All Types --</option>
-                            <option value="NDA" {% if contract_type_filter == 'NDA' %}selected{% endif %}>NDA</option>
-                            <option value="Service" {% if contract_type_filter == 'Service' %}selected{% endif %}>Service Agreement</option>
-                            <option value="Employment" {% if contract_type_filter == 'Employment' %}selected{% endif %}>Employment Contract</option>
-                            <option value="Purchase" {% if contract_type_filter == 'Purchase' %}selected{% endif %}>Purchase Agreement</option>
-                            <option value="Lease" {% if contract_type_filter == 'Lease' %}selected{% endif %}>Lease Agreement</option>
-                            <option value="Other" {% if contract_type_filter == 'Other' %}selected{% endif %}>Other</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="client_name_filter" class="form-label">Client Name</label>
-                        <input type="text" class="form-control" id="client_name_filter" name="client_name" value="{{ client_name_filter }}" placeholder="Search by client name">
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">Search</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+<!-- Search & Filter -->
+<div class="search-bar">
+    <form method="GET" style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap;">
+        <select name="contract_type" class="form-control" style="padding: 12px 15px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">All Contract Types</option>
+            <option value="NDA" {% if contract_type_filter == 'NDA' %}selected{% endif %}>NDA</option>
+            <option value="Employment" {% if contract_type_filter == 'Employment' %}selected{% endif %}>Employment</option>
+            <option value="Service Agreement" {% if contract_type_filter == 'Service Agreement' %}selected{% endif %}>Service Agreement</option>
+            <option value="Lease Agreement" {% if contract_type_filter == 'Lease Agreement' %}selected{% endif %}>Lease Agreement</option>
+            <option value="Purchase Agreement" {% if contract_type_filter == 'Purchase Agreement' %}selected{% endif %}>Purchase Agreement</option>
+        </select>
+
+        <input type="text" name="client_name" class="search-input" placeholder="Search by client name..." value="{{ client_name_filter }}">
+        
+        <button type="submit" class="btn btn-primary" style="margin: 0;">Search</button>
+    </form>
 </div>
 
-<div class="row">
-    <div class="col-md-12">
-        {% if documents %}
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead class="table-light">
-                    <tr>
-                        <th>Filename</th>
-                        <th>Contract Type</th>
-                        <th>Client Name</th>
-                        <th>Uploaded</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for doc in documents %}
-                    <tr>
-                        <td>{{ doc.filename }}</td>
-                        <td><span class="badge bg-info">{{ doc.contract_type }}</span></td>
-                        <td>{{ doc.client_name }}</td>
-                        <td>{{ doc.uploaded_at[:10] }}</td>
-                        <td>
-                            {% if doc.status == 'Uploaded' %}
-                            <span class="badge bg-warning">{{ doc.status }}</span>
-                            {% elif doc.status == 'Processed' %}
-                            <span class="badge bg-success">{{ doc.status }}</span>
-                            {% else %}
-                            <span class="badge bg-secondary">{{ doc.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{{ url_for('view_document', document_id=doc.document_id) }}" class="btn btn-sm btn-outline-primary">View</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="alert alert-info text-center" role="alert">
-            <p class="mb-0">No documents found. <a href="{{ url_for('upload') }}">Upload your first document</a></p>
-        </div>
-        {% endif %}
+<!-- Documents Table -->
+{% if documents %}
+<div class="card">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>File Name</th>
+                <th>Contract Type</th>
+                <th>Client Name</th>
+                <th>Uploaded</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documents %}
+            <tr>
+                <td>{{ doc.get('filename', 'N/A') }}</td>
+                <td>{{ doc.get('contract_type', 'N/A') }}</td>
+                <td>{{ doc.get('client_name', 'N/A') }}</td>
+                <td>
+                    {% if doc.get('uploaded_at') %}
+                        {{ doc.get('uploaded_at')[:10] }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% set status = doc.get('status', 'Unknown') %}
+                    {% if status == 'Uploaded' %}
+                        <span class="badge badge-uploaded">{{ status }}</span>
+                    {% elif status == 'Processing' %}
+                        <span class="badge badge-processing">{{ status }}</span>
+                    {% elif status == 'Completed' %}
+                        <span class="badge badge-completed">{{ status }}</span>
+                    {% else %}
+                        <span class="badge badge-pending">{{ status }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('view_document', document_id=doc.get('document_id')) }}" class="btn btn-small btn-primary">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align: center; padding: 40px; color: #666;">
+        <p style="font-size: 48px; margin-bottom: 10px;">📄</p>
+        <p style="font-size: 18px; font-weight: 600;">No documents yet</p>
+        <p style="color: #999; margin-bottom: 20px;">Start by uploading your first legal document</p>
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">Upload Document</a>
     </div>
 </div>
+{% endif %}
 {% endblock %}

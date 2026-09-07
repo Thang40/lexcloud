@@ -3,41 +3,36 @@
 {% block title %}Dashboard - LexCloud{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
-        <h1 class="mb-4">Welcome to LexCloud</h1>
-        <p class="lead text-muted">Smart Legal Document Analyzer - Manage, classify, and extract data from your contracts automatically.</p>
-    </div>
+<div class="welcome-section">
+    <h1 class="welcome-title">Welcome Back</h1>
+    <p class="welcome-subtitle">Manage your legal documents and extract valuable insights</p>
 </div>
 
-<div class="row mt-5">
-    <div class="col-md-4">
-        <div class="card shadow-sm">
-            <div class="card-body text-center">
-                <h3 class="card-title">📤 Upload Documents</h3>
-                <p class="card-text text-muted">Upload your legal documents in PDF or image format.</p>
-                <a href="{{ url_for('upload') }}" class="btn btn-primary">Go to Upload</a>
-            </div>
+<div class="card-grid">
+    <!-- Upload Card -->
+    <div class="card">
+        <div class="card-header">📤 Quick Upload</div>
+        <div class="card-body">
+            <p>Upload a new document for analysis and classification.</p>
+            <a href="{{ url_for('upload') }}" class="btn btn-primary mt-20">Go to Upload</a>
         </div>
     </div>
 
-    <div class="col-md-4">
-        <div class="card shadow-sm">
-            <div class="card-body text-center">
-                <h3 class="card-title">📋 Browse Documents</h3>
-                <p class="card-text text-muted">View and search through your uploaded documents.</p>
-                <a href="{{ url_for('list_documents') }}" class="btn btn-primary">Go to Documents</a>
-            </div>
+    <!-- Documents Card -->
+    <div class="card">
+        <div class="card-header">📋 Your Documents</div>
+        <div class="card-body">
+            <p>View and manage all your uploaded documents in one place.</p>
+            <a href="{{ url_for('list_documents') }}" class="btn btn-primary mt-20">View Documents</a>
         </div>
     </div>
 
-    <div class="col-md-4">
-        <div class="card shadow-sm">
-            <div class="card-body text-center">
-                <h3 class="card-title">📊 Analytics</h3>
-                <p class="card-text text-muted">View statistics and trends in your document library.</p>
-                <a href="{{ url_for('analytics') }}" class="btn btn-primary">Go to Analytics</a>
-            </div>
+    <!-- Analytics Card -->
+    <div class="card">
+        <div class="card-header">📊 Analytics</div>
+        <div class="card-body">
+            <p>Get insights into your document collection and processing trends.</p>
+            <a href="{{ url_for('analytics') }}" class="btn btn-primary mt-20">View Analytics</a>
         </div>
     </div>
 </div>
