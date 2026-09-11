@@ -338,15 +338,32 @@ def analytics():
 def analytics_data():
     email = session.get('email')
     print(f"[ANALYTICS API] Data requested by: {email}")
-    
+
     documents_table = get_documents_table()
 
     try:
-        response = documents_table.scan(
-            FilterExpression='owner_email = :email',
-            ExpressionAttributeValues={':email': email}
-        )
-        documents = response.get('Items', [])
+        # Fetch all documents with pagination
+        all_documents = []
+        last_evaluated_key = None
+
+        while True:
+            scan_kwargs = {
+                'FilterExpression': 'user_email = :email',
+                'ExpressionAttributeValues': {':email': email},
+                'Limit': 100
+            }
+
+            if last_evaluated_key:
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+            response = documents_table.scan(**scan_kwargs)
+            all_documents.extend(response.get('Items', []))
+
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+
+        documents = all_documents
         print(f"[ANALYTICS API] Found {len(documents)} documents")
 
         contract_counts = {}
