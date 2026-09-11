@@ -235,24 +235,31 @@ def list_documents():
     client_name_filter = request.args.get('client_name', '').strip()
 
     try:
-        # Fetch all documents for this user using query (partition key)
+        # Fetch all documents for this user
         all_documents = []
         last_evaluated_key = None
 
+        print(f"[LIST DOCS] Starting fetch for email: {email}")
+
         while True:
-            query_kwargs = {
-                'KeyConditionExpression': 'email = :email',
-                'ExpressionAttributeValues': {':email': email}
+            scan_kwargs = {
+                'FilterExpression': 'email = :email',
+                'ExpressionAttributeValues': {':email': email},
+                'Limit': 100  # Explicit limit per page
             }
 
             if last_evaluated_key:
-                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-            response = documents_table.query(**query_kwargs)
-            all_documents.extend(response.get('Items', []))
+            response = documents_table.scan(**scan_kwargs)
+            items = response.get('Items', [])
+            all_documents.extend(items)
+
+            print(f"[LIST DOCS] Fetched {len(items)} items, total: {len(all_documents)}")
 
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
+                print(f"[LIST DOCS] Pagination complete")
                 break
 
         documents = all_documents
