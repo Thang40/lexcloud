@@ -199,11 +199,10 @@ def upload():
             )
 
             documents_table = get_documents_table()
-            
-            # IMPORTANT: Email stored as 'owner_email'
+
             document_data = {
+                'email': email,
                 'document_id': document_id,
-                'owner_email': email,
                 'contract_type': contract_type,
                 'client_name': client_name,
                 's3_key': s3_key,
@@ -230,14 +229,14 @@ def upload():
 def list_documents():
     email = session.get('email')
     print(f"[LIST DOCS] Accessed by: {email}")
-    
+
     documents_table = get_documents_table()
     contract_type_filter = request.args.get('contract_type', '').strip()
     client_name_filter = request.args.get('client_name', '').strip()
 
     try:
         response = documents_table.scan(
-            FilterExpression='owner_email = :email',
+            FilterExpression='email = :email',
             ExpressionAttributeValues={':email': email}
         )
         documents = response.get('Items', [])
@@ -273,11 +272,11 @@ def view_document(document_id):
             return redirect(url_for('list_documents'))
 
         doc = response['Item']
-        
+
         # Security check: verify ownership
-        doc_owner = doc.get('owner_email')
+        doc_owner = doc.get('email')
         print(f"[VIEW DOC] Document owner: {doc_owner}, Current user: {email}")
-        
+
         if doc_owner != email:
             print(f"[VIEW DOC ERROR] Unauthorized access attempt by {email} for doc owned by {doc_owner}")
             flash('Unauthorized.', 'danger')
