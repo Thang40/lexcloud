@@ -265,7 +265,7 @@ def view_document(document_id):
     documents_table = get_documents_table()
 
     try:
-        response = documents_table.get_item(Key={'document_id': document_id})
+        response = documents_table.get_item(Key={'email': email, 'document_id': document_id})
         if 'Item' not in response:
             print(f"[VIEW DOC ERROR] Document not found: {document_id}")
             flash('Document not found.', 'danger')
