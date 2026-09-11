@@ -626,6 +626,16 @@ body {
     box-shadow: var(--shadow);
 }
 
+.auth-card .btn-primary {
+    background-color: #333;
+    color: var(--bg-white);
+}
+
+.auth-card .btn-primary:hover {
+    background-color: #555;
+    box-shadow: var(--shadow-hover);
+}
+
 .auth-title {
     font-size: 28px;
     font-weight: 700;
