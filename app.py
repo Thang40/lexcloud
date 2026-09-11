@@ -235,20 +235,20 @@ def list_documents():
     client_name_filter = request.args.get('client_name', '').strip()
 
     try:
-        # Fetch all documents for this user
+        # Fetch all documents for this user using query (partition key)
         all_documents = []
         last_evaluated_key = None
 
         while True:
-            scan_kwargs = {
-                'FilterExpression': 'email = :email',
+            query_kwargs = {
+                'KeyConditionExpression': 'email = :email',
                 'ExpressionAttributeValues': {':email': email}
             }
 
             if last_evaluated_key:
-                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-            response = documents_table.scan(**scan_kwargs)
+            response = documents_table.query(**query_kwargs)
             all_documents.extend(response.get('Items', []))
 
             last_evaluated_key = response.get('LastEvaluatedKey')
