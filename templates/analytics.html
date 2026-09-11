@@ -68,7 +68,7 @@ fetch('{{ url_for("analytics_data") }}')
         const legend = data.contract_types.labels.map((label, i) => {
             return `<strong>${label}:</strong> ${data.contract_types.data[i]} documents`;
         }).join(' | ');
-        document.getElementById('chartLegend').textContent = legend || 'No data available';
+        document.getElementById('chartLegend').innerHTML = legend || 'No data available';
 
         // Draw Contract Types Bar Chart
         const contractCtx = document.getElementById('contractChart').getContext('2d');
