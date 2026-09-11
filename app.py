@@ -200,9 +200,13 @@ def upload():
 
             documents_table = get_documents_table()
 
+            # Use composite key: email#document_id to support multiple documents per user
+            composite_key = f"{email}#{document_id}"
+
             document_data = {
-                'email': email,
+                'email': composite_key,
                 'document_id': document_id,
+                'user_email': email,
                 'contract_type': contract_type,
                 'client_name': client_name,
                 's3_key': s3_key,
@@ -210,7 +214,7 @@ def upload():
                 'status': 'Uploaded',
                 'filename': filename
             }
-            
+
             print(f"[UPLOAD DB] Saving document: {document_data}")
             documents_table.put_item(Item=document_data)
 
@@ -235,7 +239,7 @@ def list_documents():
     client_name_filter = request.args.get('client_name', '').strip()
 
     try:
-        # Fetch all documents for this user
+        # Fetch all documents for this user (filter by user_email)
         all_documents = []
         last_evaluated_key = None
 
@@ -243,9 +247,9 @@ def list_documents():
 
         while True:
             scan_kwargs = {
-                'FilterExpression': 'email = :email',
+                'FilterExpression': 'user_email = :email',
                 'ExpressionAttributeValues': {':email': email},
-                'Limit': 100  # Explicit limit per page
+                'Limit': 100
             }
 
             if last_evaluated_key:
@@ -288,7 +292,8 @@ def view_document(document_id):
     documents_table = get_documents_table()
 
     try:
-        response = documents_table.get_item(Key={'email': email, 'document_id': document_id})
+        composite_key = f"{email}#{document_id}"
+        response = documents_table.get_item(Key={'email': composite_key})
         if 'Item' not in response:
             print(f"[VIEW DOC ERROR] Document not found: {document_id}")
             flash('Document not found.', 'danger')
@@ -297,7 +302,7 @@ def view_document(document_id):
         doc = response['Item']
 
         # Security check: verify ownership
-        doc_owner = doc.get('email')
+        doc_owner = doc.get('user_email')
         print(f"[VIEW DOC] Document owner: {doc_owner}, Current user: {email}")
 
         if doc_owner != email:
