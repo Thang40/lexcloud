@@ -235,11 +235,27 @@ def list_documents():
     client_name_filter = request.args.get('client_name', '').strip()
 
     try:
-        response = documents_table.scan(
-            FilterExpression='email = :email',
-            ExpressionAttributeValues={':email': email}
-        )
-        documents = response.get('Items', [])
+        # Fetch all documents for this user
+        all_documents = []
+        last_evaluated_key = None
+
+        while True:
+            scan_kwargs = {
+                'FilterExpression': 'email = :email',
+                'ExpressionAttributeValues': {':email': email}
+            }
+
+            if last_evaluated_key:
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+            response = documents_table.scan(**scan_kwargs)
+            all_documents.extend(response.get('Items', []))
+
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+
+        documents = all_documents
         print(f"[LIST DOCS] Found {len(documents)} documents for {email}")
 
         if contract_type_filter:
