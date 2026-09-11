@@ -617,13 +617,13 @@ body {
 }
 
 .auth-card {
-    background-color: var(--bg-white);
-    border: 1px solid var(--border-color);
+    background-color: transparent;
+    border: none;
     border-radius: 8px;
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: var(--shadow);
+    box-shadow: none;
 }
 
 .auth-card .btn-primary {
