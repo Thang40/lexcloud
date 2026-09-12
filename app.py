@@ -206,15 +206,16 @@ def upload():
 
             # Use composite key: email#document_id to support multiple documents per user
             composite_key = f"{email}#{document_id}"
+            uploaded_at = datetime.utcnow().isoformat()
 
             document_data = {
                 'email': composite_key,
                 'document_id': document_id,
                 'user_email': email,
-                'contract_type': str(contract_type) if contract_type else 'Unknown',
-                'client_name': str(client_name) if client_name else 'Unknown',
+                'contract_type': contract_type if contract_type else 'Unknown',
+                'client_name': client_name if client_name else 'Unknown',
                 's3_key': s3_key,
-                'uploaded_at': datetime.utcnow().isoformat(),
+                'uploaded_at': uploaded_at,
                 'status': 'Uploaded',
                 'filename': filename
             }
