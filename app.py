@@ -172,7 +172,7 @@ def upload():
 
         # Check file type
         allowed_extensions = {'pdf', 'png', 'jpg', 'jpeg', 'docx'}
-        if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+        if not file.filename or '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
             flash('Invalid file type. Only PDF, PNG, JPG, JPEG, DOCX allowed.', 'danger')
             return redirect(url_for('upload'))
 
