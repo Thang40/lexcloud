@@ -166,11 +166,12 @@ def upload():
             flash('No file selected.', 'danger')
             return redirect(url_for('upload'))
 
-        contract_type = contract_type if contract_type else 'Unknown'
-        client_name = client_name if client_name else 'Unknown'
+        if not contract_type:
+            flash('Contract type is required.', 'danger')
+            return redirect(url_for('upload'))
 
-        if contract_type == 'Unknown' or client_name == 'Unknown':
-            flash('Contract type and client name are required.', 'danger')
+        if not client_name:
+            flash('Client name is required.', 'danger')
             return redirect(url_for('upload'))
 
         # Check file type
