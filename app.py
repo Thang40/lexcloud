@@ -159,7 +159,7 @@ def upload():
         contract_type = request.form.get('contract_type', '').strip()
         client_name = request.form.get('client_name', '').strip()
 
-        print(f"[UPLOAD POST] Email: {email}, File: {file.filename if file else 'None'}")
+        print(f"[UPLOAD POST] Email: {email}, File: {file.filename if file else 'None'}, Contract: '{contract_type}', Client: '{client_name}'")
 
         # Validation
         if not file or file.filename == '':
@@ -210,8 +210,8 @@ def upload():
                 'email': composite_key,
                 'document_id': document_id,
                 'user_email': email,
-                'contract_type': contract_type,
-                'client_name': client_name,
+                'contract_type': str(contract_type) if contract_type else 'Unknown',
+                'client_name': str(client_name) if client_name else 'Unknown',
                 's3_key': s3_key,
                 'uploaded_at': datetime.utcnow().isoformat(),
                 'status': 'Uploaded',
