@@ -209,15 +209,15 @@ def upload():
             uploaded_at = datetime.utcnow().isoformat()
 
             document_data = {
-                'email': composite_key,
-                'document_id': document_id,
-                'user_email': email,
-                'contract_type': contract_type if contract_type else 'Unknown',
-                'client_name': client_name if client_name else 'Unknown',
-                's3_key': s3_key,
-                'uploaded_at': uploaded_at,
+                'email': str(composite_key),
+                'document_id': str(document_id),
+                'user_email': str(email),
+                'contract_type': str(contract_type) if contract_type else 'Unknown',
+                'client_name': str(client_name) if client_name else 'Unknown',
+                's3_key': str(s3_key),
+                'uploaded_at': str(uploaded_at),
                 'status': 'Uploaded',
-                'filename': filename
+                'filename': str(filename)
             }
 
             print(f"[UPLOAD DB] Saving document: {document_data}")
@@ -227,7 +227,10 @@ def upload():
             flash(f'Document "{filename}" uploaded successfully.', 'success')
             return redirect(url_for('list_documents'))
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
             print(f"[UPLOAD ERROR] {str(e)}")
+            print(f"[UPLOAD TRACEBACK] {error_trace}")
             flash(f'Upload failed: {str(e)}', 'danger')
             return redirect(url_for('upload'))
 
