@@ -25,7 +25,7 @@
         <div class="form-group">
             <label for="contract_type">Contract Type</label>
             <select id="contract_type" name="contract_type" required>
-                <option value="">Select a contract type...</option>
+                <option value="" disabled selected>Select a contract type...</option>
                 <option value="NDA">Non-Disclosure Agreement (NDA)</option>
                 <option value="Employment">Employment Contract</option>
                 <option value="Service Agreement">Service Agreement</option>
@@ -80,6 +80,24 @@ fileInput.addEventListener('change', () => {
     if (fileInput.files.length) {
         const fileName = fileInput.files[0].name;
         document.querySelector('.upload-title').textContent = fileName;
+    }
+});
+
+// Form validation before submit
+document.querySelector('form').addEventListener('submit', (e) => {
+    const contractType = document.getElementById('contract_type').value;
+    const clientName = document.getElementById('client_name').value.trim();
+
+    if (!contractType) {
+        e.preventDefault();
+        alert('Please select a contract type');
+        return false;
+    }
+
+    if (!clientName) {
+        e.preventDefault();
+        alert('Please enter a client name');
+        return false;
     }
 });
 </script>
