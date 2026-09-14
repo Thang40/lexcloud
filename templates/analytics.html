@@ -38,7 +38,7 @@
         <div class="chart-title">📊 Documents by Contract Type</div>
         <canvas id="contractChart"></canvas>
         <div style="margin-top: 15px; font-size: 13px; color: #666;">
-            <p id="chartLegend" style="margin: 0;"></p>
+            <ul id="chartLegend" style="margin: 0; padding-left: 18px;"></ul>
         </div>
     </div>
 
@@ -66,9 +66,9 @@ fetch('{{ url_for("analytics_data") }}')
 
         // Update legend
         const legend = data.contract_types.labels.map((label, i) => {
-            return `<strong>${label}:</strong> ${data.contract_types.data[i]} documents`;
-        }).join(' | ');
-        document.getElementById('chartLegend').innerHTML = legend || 'No data available';
+            return `<li><strong>${label}:</strong> ${data.contract_types.data[i]} documents</li>`;
+        }).join('');
+        document.getElementById('chartLegend').innerHTML = legend || '<li>No data available</li>';
 
         // Draw Contract Types Bar Chart
         const contractCanvas = document.getElementById('contractChart');
@@ -99,20 +99,28 @@ function setupCanvas(canvas) {
 function drawBarChart(ctx, labels, data) {
     const width = ctx.__cssWidth;
     const height = ctx.__cssHeight;
-    const leftPadding = 70;
+    const font = '11px Arial';
+    const angle = Math.PI / 4; // 45deg
     const rightPadding = 20;
     const topPadding = 30;
-    const bottomPadding = 60;
+    const bottomPadding = 70;
     const maxValue = Math.max(...data, 1);
 
-    ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#333';
-    ctx.font = '11px Arial';
+    ctx.font = font;
 
     if (labels.length === 0) {
+        ctx.clearRect(0, 0, width, height);
         ctx.fillText('No data available', width / 2 - 60, height / 2);
         return;
     }
+
+    // Reserve enough left padding for the longest label's horizontal
+    // projection once rotated, so it never spills outside the canvas.
+    const longestLabelWidth = Math.max(...labels.map(l => ctx.measureText(String(l)).width));
+    const leftPadding = Math.max(50, Math.ceil(longestLabelWidth * Math.cos(angle)) + 15);
+
+    ctx.clearRect(0, 0, width, height);
 
     const plotWidth = width - leftPadding - rightPadding;
     const barWidth = Math.min(60, plotWidth / labels.length - 10);
@@ -130,13 +138,14 @@ function drawBarChart(ctx, labels, data) {
 
         // Value above bar
         ctx.fillStyle = '#333';
+        ctx.font = font;
         ctx.textAlign = 'center';
         ctx.fillText(value, x + barWidth / 2, y - 5);
 
         // Rotated label below bar to avoid overlap
         ctx.save();
-        ctx.translate(x + barWidth / 2, height - bottomPadding + 15);
-        ctx.rotate(-Math.PI / 6);
+        ctx.translate(x + barWidth / 2, height - bottomPadding + 12);
+        ctx.rotate(-angle);
         ctx.textAlign = 'right';
         ctx.fillText(label, 0, 0);
         ctx.restore();
