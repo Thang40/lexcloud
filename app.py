@@ -83,7 +83,7 @@ def analyze_document_with_openai(document_text, max_retries=2):
     for attempt in range(max_retries + 1):
         try:
             response = openai_client.chat.completions.create(
-                model='gpt-4',
+                model='gpt-4o-mini',
                 messages=[
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': f'Document content:\n\n{document_text}'}
