@@ -11,7 +11,7 @@ import boto3
 from functools import wraps
 from collections import defaultdict
 import re
-from openai import OpenAI, RateLimitError, AuthenticationError
+import requests
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
 
@@ -24,11 +24,10 @@ app.config['S3_INPUT_BUCKET'] = os.getenv('S3_INPUT_BUCKET')
 app.config['S3_OUTPUT_BUCKET'] = os.getenv('S3_OUTPUT_BUCKET')
 app.config['USERS_TABLE'] = os.getenv('USERS_TABLE', 'users')
 app.config['DOCUMENTS_TABLE'] = os.getenv('DOCUMENTS_TABLE', 'doc')
-app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
+app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
 
 s3_client = boto3.client('s3', region_name=app.config['AWS_REGION'])
 dynamodb = boto3.resource('dynamodb', region_name=app.config['AWS_REGION'])
-openai_client = OpenAI(api_key=app.config['OPENAI_API_KEY']) if app.config['OPENAI_API_KEY'] else None
 
 def get_users_table():
     return dynamodb.Table(app.config['USERS_TABLE'])
@@ -40,11 +39,11 @@ def is_valid_client_name(name):
     """Validate client name - only letters, numbers, spaces, hyphens, apostrophes"""
     return bool(re.match(r"^[a-zA-Z0-9\s\-']+$", name.strip()))
 
-# Max characters of document text sent to OpenAI (keeps prompt + cost bounded)
+# Max characters of document text sent to Gemini (keeps prompt + cost bounded)
 MAX_ANALYSIS_CHARS = 15000
 
 def extract_document_text(file_bytes, filename):
-    """Extract plain text from a PDF or DOCX file for OpenAI analysis.
+    """Extract plain text from a PDF or DOCX file for Gemini analysis.
 
     PDF parsing via PyPDF2 [1] and DOCX parsing via python-docx [2].
     [1] https://pypdf2.readthedocs.io/
@@ -63,41 +62,64 @@ def extract_document_text(file_bytes, filename):
 
     return text.strip()[:MAX_ANALYSIS_CHARS]
 
-def analyze_document_with_openai(document_text, max_retries=2):
-    """Send document text to OpenAI GPT-4 and return structured legal analysis.
+GEMINI_ENDPOINT = (
+    'https://generativelanguage.googleapis.com/v1beta/models/'
+    'gemini-1.5-flash:generateContent'
+)
 
-    Uses the Chat Completions API with JSON response format [1].
-    [1] https://platform.openai.com/docs/guides/text-generation/json-mode
+class GeminiRateLimitError(Exception):
+    pass
+
+class GeminiAuthError(Exception):
+    pass
+
+def analyze_document_with_gemini(document_text, max_retries=2):
+    """Send document text to Google Gemini and return structured legal analysis.
+
+    Uses the Gemini REST API with a JSON-constrained response schema [1].
+    [1] https://ai.google.dev/gemini-api/docs/structured-output
     """
-    if not openai_client:
-        raise RuntimeError('OPENAI_API_KEY is not configured')
+    if not app.config['GEMINI_API_KEY']:
+        raise RuntimeError('GEMINI_API_KEY is not configured')
 
-    system_prompt = (
+    prompt = (
         "You are a legal document analyzer. Analyze the provided legal document and "
         "extract: key parties/signatories, document type, important dates and deadlines, "
         "identified risks or problematic clauses, and a 2-3 sentence summary. "
         "Respond ONLY in JSON with keys: parties (array), doc_type (string), "
-        "dates (array), risks (array), summary (string), risk_level (one of 'low', 'medium', 'high')."
+        "dates (array), risks (array), summary (string), risk_level (one of 'low', 'medium', 'high').\n\n"
+        f"Document content:\n\n{document_text}"
     )
 
+    payload = {
+        'contents': [{'parts': [{'text': prompt}]}],
+        'generationConfig': {
+            'temperature': 0.2,
+            'responseMimeType': 'application/json'
+        }
+    }
+
     for attempt in range(max_retries + 1):
-        try:
-            response = openai_client.chat.completions.create(
-                model='gpt-4o-mini',
-                messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': f'Document content:\n\n{document_text}'}
-                ],
-                response_format={'type': 'json_object'},
-                temperature=0.2,
-                timeout=25
-            )
-            return json.loads(response.choices[0].message.content)
-        except RateLimitError:
+        response = requests.post(
+            GEMINI_ENDPOINT,
+            params={'key': app.config['GEMINI_API_KEY']},
+            json=payload,
+            timeout=25
+        )
+
+        if response.status_code == 429:
             if attempt < max_retries:
                 time.sleep(2 ** attempt)
                 continue
-            raise
+            raise GeminiRateLimitError('Gemini rate limit reached')
+
+        if response.status_code in (401, 403):
+            raise GeminiAuthError(response.text)
+
+        response.raise_for_status()
+        data = response.json()
+        text = data['candidates'][0]['content']['parts'][0]['text']
+        return json.loads(text)
 
 def login_required(f):
     @wraps(f)
@@ -531,15 +553,15 @@ def view_document(document_id):
 @app.route('/api/analyze-document', methods=['POST'])
 @login_required
 def analyze_document():
-    """Extract text from a document and run OpenAI GPT-4 legal analysis on it."""
+    """Extract text from a document and run Google Gemini legal analysis on it."""
     email = session.get('email')
     document_id = request.json.get('document_id') if request.is_json else request.form.get('document_id')
 
     if not document_id:
         return jsonify({'error': 'document_id is required'}), 400
 
-    if not openai_client:
-        return jsonify({'error': 'OpenAI API key is not configured on the server'}), 503
+    if not app.config['GEMINI_API_KEY']:
+        return jsonify({'error': 'Gemini API key is not configured on the server'}), 503
 
     documents_table = get_documents_table()
     composite_key = f"{email}#{document_id}"
@@ -580,7 +602,7 @@ def analyze_document():
             )
             return jsonify({'error': 'No extractable text found in document'}), 400
 
-        analysis = analyze_document_with_openai(document_text)
+        analysis = analyze_document_with_gemini(document_text)
 
         documents_table.update_item(
             Key={'email': composite_key, 'document_id': document_id},
@@ -591,22 +613,22 @@ def analyze_document():
         print(f"[ANALYZE DOC SUCCESS] {document_id} for {email}")
         return jsonify({'success': True, 'analysis': analysis}), 200
 
-    except AuthenticationError:
-        print(f"[ANALYZE DOC ERROR] Invalid OpenAI API key")
+    except GeminiAuthError:
+        print(f"[ANALYZE DOC ERROR] Invalid Gemini API key")
         documents_table.update_item(
             Key={'email': composite_key, 'document_id': document_id},
             UpdateExpression='SET analysis_status = :status',
             ExpressionAttributeValues={':status': 'failed'}
         )
-        return jsonify({'error': 'OpenAI API key is invalid. Please check server configuration.'}), 502
-    except RateLimitError:
-        print(f"[ANALYZE DOC ERROR] OpenAI rate limit exceeded")
+        return jsonify({'error': 'Gemini API key is invalid. Please check server configuration.'}), 502
+    except GeminiRateLimitError:
+        print(f"[ANALYZE DOC ERROR] Gemini rate limit exceeded")
         documents_table.update_item(
             Key={'email': composite_key, 'document_id': document_id},
             UpdateExpression='SET analysis_status = :status',
             ExpressionAttributeValues={':status': 'failed'}
         )
-        return jsonify({'error': 'OpenAI rate limit reached. Please try again shortly.'}), 429
+        return jsonify({'error': 'Gemini rate limit reached. Please try again shortly.'}), 429
     except Exception as e:
         print(f"[ANALYZE DOC ERROR] {str(e)}")
         try:
