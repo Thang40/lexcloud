@@ -36,10 +36,10 @@ def lambda_handler(event, context):
             bucket = record['s3']['bucket']['name']
             key = record['s3']['object']['key']
 
-            document_id = extract_document_id_from_key(key)
+            email, document_id = extract_email_and_document_id(key)
 
-            if not document_id:
-                print(f"Could not extract document_id from key: {key}")
+            if not email or not document_id:
+                print(f"Could not extract email/document_id from key: {key}")
                 continue
 
             response = s3_client.head_object(Bucket=bucket, Key=key)
@@ -47,8 +47,9 @@ def lambda_handler(event, context):
             content_type = response.get('ContentType', 'application/octet-stream')
 
             table = dynamodb.Table(DOCUMENTS_TABLE)
+            composite_key = f"{email}#{document_id}"
             table.update_item(
-                Key={'document_id': document_id},
+                Key={'email': composite_key, 'document_id': document_id},
                 UpdateExpression='SET #status = :status, #processed_at = :processed_at, #file_size = :file_size, #content_type = :content_type',
                 ExpressionAttributeNames={
                     '#status': 'status',
@@ -64,7 +65,7 @@ def lambda_handler(event, context):
                 }
             )
 
-            print(f"Successfully processed document: {document_id}")
+            print(f"Successfully processed document: {document_id} for {email}")
 
         return {
             'statusCode': 200,
@@ -78,17 +79,19 @@ def lambda_handler(event, context):
             'body': json.dumps(f'Error: {str(e)}')
         }
 
-def extract_document_id_from_key(key):
+def extract_email_and_document_id(key):
     """
-    Extract document_id from S3 key format: documents/<email>/<uuid>_<filename>
+    Extract email and document_id from S3 key format: documents/<email>/<uuid>_<filename>
+    Returns: (email, document_id) or (None, None) if extraction fails
     """
     try:
         parts = key.split('/')
         if len(parts) >= 3 and parts[0] == 'documents':
+            email = parts[1]
             filename_part = parts[2]
             document_id = filename_part.split('_')[0]
-            return document_id
+            return email, document_id
     except Exception as e:
-        print(f"Error extracting document_id: {str(e)}")
+        print(f"Error extracting email/document_id: {str(e)}")
 
-    return None
+    return None, None

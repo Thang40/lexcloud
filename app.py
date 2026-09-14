@@ -41,6 +41,88 @@ def login_required(f):
 def health():
     return {'status': 'ok'}, 200
 
+@app.route('/test-upload-form')
+def test_upload_form():
+    """Serve test upload form"""
+    return render_template('test_upload.html')
+
+@app.route('/api/debug/test-upload', methods=['POST'])
+def debug_test_upload():
+    """Debug endpoint to test upload without UI"""
+    try:
+        file = request.files.get('file')
+        contract_type = request.form.get('contract_type', '').strip()
+        client_name = request.form.get('client_name', '').strip()
+        email = session.get('email', 'test@example.com')
+
+        # Validation checks
+        if not file:
+            return {'error': 'No file provided'}, 400
+
+        if not contract_type:
+            return {'error': 'contract_type required'}, 400
+
+        if not client_name:
+            return {'error': 'client_name required'}, 400
+
+        # Debug values
+        debug_info = {
+            'email': email,
+            'file_name': file.filename,
+            'file_content_type': file.content_type,
+            'file_content_type_type': type(file.content_type).__name__,
+            'contract_type': contract_type,
+            'client_name': client_name,
+            'file_size': file.seek(0, 2),
+        }
+        file.seek(0)
+
+        # Try to upload
+        filename = file.filename
+        document_id = str(uuid4())
+        s3_key = f"documents/{email}/{document_id}_{filename}"
+
+        s3_client.upload_fileobj(
+            file.stream,
+            app.config['S3_INPUT_BUCKET'],
+            s3_key,
+            ExtraArgs={'ContentType': str(file.content_type) if file.content_type else 'application/octet-stream'}
+        )
+
+        documents_table = get_documents_table()
+        composite_key = f"{email}#{document_id}"
+        uploaded_at = datetime.utcnow().isoformat()
+
+        document_data = {
+            'email': str(composite_key),
+            'document_id': str(document_id),
+            'user_email': str(email),
+            'contract_type': str(contract_type) if contract_type else 'Unknown',
+            'client_name': str(client_name) if client_name else 'Unknown',
+            's3_key': str(s3_key),
+            'uploaded_at': str(uploaded_at),
+            'status': 'Uploaded',
+            'filename': str(filename)
+        }
+
+        documents_table.put_item(Item=document_data)
+
+        return {
+            'success': True,
+            'message': 'Document uploaded successfully',
+            'debug': debug_info,
+            'document_id': document_id
+        }, 200
+
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        return {
+            'error': str(e),
+            'traceback': error_trace,
+            'type': type(e).__name__
+        }, 500
+
 @app.route('/')
 def index():
     if 'email' in session:
@@ -146,20 +228,16 @@ def dashboard():
 @login_required
 def upload():
     email = session.get('email')
-    print(f"[UPLOAD] Session email: {email}")
-    
+
     # DEBUG: Check if email exists
     if not email:
-        print(f"[UPLOAD ERROR] Email not in session!")
         flash('Error: Session email not found. Please log in again.', 'danger')
         return redirect(url_for('login'))
-    
+
     if request.method == 'POST':
         file = request.files.get('file')
         contract_type = request.form.get('contract_type', '').strip()
         client_name = request.form.get('client_name', '').strip()
-
-        print(f"[UPLOAD POST] Email: {email}, File: {file.filename if file else 'None'}, Contract: '{contract_type}', Client: '{client_name}'")
 
         # Validation
         if not file or file.filename == '':
@@ -199,7 +277,7 @@ def upload():
                 file.stream,
                 app.config['S3_INPUT_BUCKET'],
                 s3_key,
-                ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'}
+                ExtraArgs={'ContentType': str(file.content_type) if file.content_type else 'application/octet-stream'}
             )
 
             documents_table = get_documents_table()
