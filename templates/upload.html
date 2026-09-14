@@ -38,7 +38,8 @@
         <!-- Client Name -->
         <div class="form-group">
             <label for="client_name">Client Name</label>
-            <input type="text" id="client_name" name="client_name" placeholder="Enter client or company name" required>
+            <input type="text" id="client_name" name="client_name" placeholder="Enter client or company name" required list="clientNames">
+            <datalist id="clientNames"></datalist>
         </div>
 
         <!-- Buttons -->
@@ -50,6 +51,21 @@
 </div>
 
 <script>
+// Load client name suggestions
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('/api/client-names')
+        .then(res => res.json())
+        .then(names => {
+            const datalist = document.getElementById('clientNames');
+            names.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                datalist.appendChild(option);
+            });
+        })
+        .catch(err => console.log('Could not load client names'));
+});
+
 // Drag and drop functionality
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('file');

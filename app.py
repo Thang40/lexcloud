@@ -326,6 +326,44 @@ def upload():
 
     return render_template('upload.html')
 
+@app.route('/api/client-names', methods=['GET'])
+@login_required
+def get_client_names():
+    """Get unique client names for current user (for autocomplete)"""
+    email = session.get('email')
+    documents_table = get_documents_table()
+
+    try:
+        # Scan for all documents by this user
+        response = documents_table.scan(
+            FilterExpression='user_email = :email',
+            ExpressionAttributeValues={':email': email},
+            ProjectionExpression='client_name'
+        )
+
+        # Extract unique client names
+        client_names = set()
+        for item in response.get('Items', []):
+            if item.get('client_name') and item['client_name'] != 'Unknown':
+                client_names.add(item['client_name'])
+
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = documents_table.scan(
+                FilterExpression='user_email = :email',
+                ExpressionAttributeValues={':email': email},
+                ProjectionExpression='client_name',
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            for item in response.get('Items', []):
+                if item.get('client_name') and item['client_name'] != 'Unknown':
+                    client_names.add(item['client_name'])
+
+        return jsonify(sorted(list(client_names)))
+    except Exception as e:
+        print(f"[GET CLIENT NAMES ERROR] {str(e)}")
+        return jsonify([]), 500
+
 @app.route('/documents', methods=['GET'])
 @login_required
 def list_documents():
