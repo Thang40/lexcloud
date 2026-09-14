@@ -848,11 +848,12 @@ body {
 .chart-bar-label {
     flex: none;
     text-align: center;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.3;
     color: #555;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    padding: 0 4px;
+    word-break: normal;
+    overflow-wrap: normal;
+    padding: 0 2px;
     box-sizing: border-box;
 }
 
