@@ -25,8 +25,6 @@ app.config['S3_OUTPUT_BUCKET'] = os.getenv('S3_OUTPUT_BUCKET')
 app.config['USERS_TABLE'] = os.getenv('USERS_TABLE', 'users')
 app.config['DOCUMENTS_TABLE'] = os.getenv('DOCUMENTS_TABLE', 'doc')
 app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
-app.config['SENDGRID_API_KEY'] = os.getenv('SENDGRID_API_KEY')
-app.config['SENDGRID_FROM_EMAIL'] = os.getenv('SENDGRID_FROM_EMAIL')
 
 s3_client = boto3.client('s3', region_name=app.config['AWS_REGION'])
 dynamodb = boto3.resource('dynamodb', region_name=app.config['AWS_REGION'])
@@ -122,41 +120,6 @@ def analyze_document_with_gemini(document_text, max_retries=2):
         data = response.json()
         text = data['candidates'][0]['content']['parts'][0]['text']
         return json.loads(text)
-
-SENDGRID_ENDPOINT = 'https://api.sendgrid.com/v3/mail/send'
-
-def send_notification_email(to_email, subject, body_text):
-    """Send a transactional email via SendGrid's REST API [1].
-
-    Failures are logged but never raised — email notifications are best-effort
-    and must not block the upload/analysis flow they are attached to.
-    [1] https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send
-    """
-    if not app.config['SENDGRID_API_KEY'] or not app.config['SENDGRID_FROM_EMAIL']:
-        return False
-
-    payload = {
-        'personalizations': [{'to': [{'email': to_email}]}],
-        'from': {'email': app.config['SENDGRID_FROM_EMAIL']},
-        'subject': subject,
-        'content': [{'type': 'text/plain', 'value': body_text}]
-    }
-
-    try:
-        response = requests.post(
-            SENDGRID_ENDPOINT,
-            headers={
-                'Authorization': f"Bearer {app.config['SENDGRID_API_KEY']}",
-                'Content-Type': 'application/json'
-            },
-            json=payload,
-            timeout=10
-        )
-        response.raise_for_status()
-        return True
-    except Exception as e:
-        print(f"[SENDGRID ERROR] {str(e)}")
-        return False
 
 def login_required(f):
     @wraps(f)
@@ -439,11 +402,6 @@ def upload():
             documents_table.put_item(Item=document_data)
 
             print(f"[UPLOAD SUCCESS] Document uploaded by: {email}")
-            send_notification_email(
-                email,
-                'LexCloud: Document uploaded successfully',
-                f'Your document "{filename}" ({contract_type}, client: {client_name}) has been uploaded and is ready for analysis.'
-            )
             flash(f'Document "{filename}" uploaded successfully.', 'success')
             return redirect(url_for('list_documents'))
         except Exception as e:
@@ -653,13 +611,6 @@ def analyze_document():
         )
 
         print(f"[ANALYZE DOC SUCCESS] {document_id} for {email}")
-        send_notification_email(
-            email,
-            'LexCloud: Document analysis completed',
-            f'AI analysis for "{doc.get("filename", document_id)}" is ready. '
-            f'Risk level: {analysis.get("risk_level", "unknown")}. '
-            f'Summary: {analysis.get("summary", "")}'
-        )
         return jsonify({'success': True, 'analysis': analysis}), 200
 
     except GeminiAuthError:
