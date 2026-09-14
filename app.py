@@ -116,6 +116,11 @@ def analyze_document_with_gemini(document_text, max_retries=2):
         if response.status_code in (401, 403):
             raise GeminiAuthError(response.text)
 
+        if response.status_code in (500, 502, 503, 504):
+            if attempt < max_retries:
+                time.sleep(2 ** attempt)
+                continue
+
         response.raise_for_status()
         data = response.json()
         text = data['candidates'][0]['content']['parts'][0]['text']
