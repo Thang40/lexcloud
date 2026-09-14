@@ -110,8 +110,6 @@ function drawBarChart(ctx, labels, data, labelsContainer) {
     const width = ctx.__cssWidth;
     const height = ctx.__cssHeight;
     const font = '12px Arial';
-    const leftPadding = 15;
-    const rightPadding = 15;
     const topPadding = 30;
     const bottomPadding = 15;
     const maxValue = Math.max(...data, 1);
@@ -128,15 +126,18 @@ function drawBarChart(ctx, labels, data, labelsContainer) {
         return;
     }
 
-    const plotWidth = width - leftPadding - rightPadding;
-    const barWidth = Math.min(60, plotWidth / labels.length - 10);
-    const barSpacing = plotWidth / labels.length;
+    // No side padding: the canvas and the labels container below it are the
+    // same CSS width, so dividing both into N equal columns (0 to width)
+    // keeps every bar aligned with its label without needing two paddings
+    // to stay in sync.
+    const colWidth = width / labels.length;
+    const barWidth = Math.min(60, colWidth - 10);
 
     // Draw bars evenly spaced across the full width
     labels.forEach((label, i) => {
         const value = data[i];
         const barHeight = (value / maxValue) * (height - bottomPadding - topPadding);
-        const x = leftPadding + i * barSpacing + (barSpacing - barWidth) / 2;
+        const x = i * colWidth + (colWidth - barWidth) / 2;
         const y = height - bottomPadding - barHeight;
 
         ctx.fillStyle = '#0066cc';
@@ -151,12 +152,10 @@ function drawBarChart(ctx, labels, data, labelsContainer) {
 
     // Horizontal labels below the canvas, one per column, same widths as bars
     if (labelsContainer) {
-        labelsContainer.style.paddingLeft = leftPadding + 'px';
-        labelsContainer.style.paddingRight = rightPadding + 'px';
         labels.forEach((label, i) => {
             const item = document.createElement('div');
             item.className = 'chart-bar-label';
-            item.style.flexBasis = (100 / labels.length) + '%';
+            item.style.width = colWidth + 'px';
             item.textContent = label;
             labelsContainer.appendChild(item);
         });
