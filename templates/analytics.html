@@ -32,25 +32,13 @@
 </div>
 
 <!-- Charts -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px;">
-    <!-- Contract Types Chart -->
-    <div class="chart-container">
-        <div class="chart-title">📊 Documents by Contract Type</div>
-        <canvas id="contractChart"></canvas>
-        <div id="contractLabels" class="chart-bar-labels"></div>
-        <div style="margin-top: 15px; font-size: 13px; color: #666;">
-            <ul id="chartLegend" style="margin: 0; padding-left: 18px;"></ul>
-        </div>
-    </div>
-
-    <!-- Monthly Trend Chart -->
-    <div class="chart-container">
-        <div class="chart-title">📈 Monthly Upload Trend</div>
-        <canvas id="monthlyChart"></canvas>
-        <div id="monthlyLabels" class="chart-bar-labels"></div>
-        <div style="margin-top: 15px; font-size: 13px; color: #666;">
-            <p id="monthlyTotal" style="margin: 0;">Total uploads by month</p>
-        </div>
+<!-- Contract Types Chart -->
+<div class="chart-container">
+    <div class="chart-title">📊 Documents by Contract Type</div>
+    <canvas id="contractChart"></canvas>
+    <div id="contractLabels" class="chart-bar-labels"></div>
+    <div style="margin-top: 15px; font-size: 13px; color: #666;">
+        <ul id="chartLegend" style="margin: 0; padding-left: 18px;"></ul>
     </div>
 </div>
 
@@ -72,19 +60,10 @@ fetch('{{ url_for("analytics_data") }}')
         }).join('');
         document.getElementById('chartLegend').innerHTML = legend || '<li>No data available</li>';
 
-        // Monthly total
-        const monthlyTotal = data.monthly.data.reduce((a, b) => a + b, 0);
-        document.getElementById('monthlyTotal').textContent = `Total: ${monthlyTotal} document${monthlyTotal === 1 ? '' : 's'} uploaded`;
-
         // Draw Contract Types Bar Chart
         const contractCanvas = document.getElementById('contractChart');
         drawBarChart(setupCanvas(contractCanvas), data.contract_types.labels, data.contract_types.data,
             document.getElementById('contractLabels'));
-
-        // Draw Monthly Trend Bar Chart
-        const monthlyCanvas = document.getElementById('monthlyChart');
-        drawBarChart(setupCanvas(monthlyCanvas), data.monthly.labels, data.monthly.data,
-            document.getElementById('monthlyLabels'));
     })
     .catch(error => console.error('Error:', error));
 
@@ -92,7 +71,7 @@ fetch('{{ url_for("analytics_data") }}')
 function setupCanvas(canvas) {
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = canvas.clientWidth || 400;
-    const cssHeight = 200;
+    const cssHeight = 260;
     canvas.style.height = cssHeight + 'px';
     canvas.width = cssWidth * dpr;
     canvas.height = cssHeight * dpr;
