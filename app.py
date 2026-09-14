@@ -8,6 +8,7 @@ import bcrypt
 import boto3
 from functools import wraps
 from collections import defaultdict
+import re
 
 load_dotenv()
 
@@ -27,6 +28,10 @@ def get_users_table():
 
 def get_documents_table():
     return dynamodb.Table(app.config['DOCUMENTS_TABLE'])
+
+def is_valid_client_name(name):
+    """Validate client name - only letters, numbers, spaces, hyphens, apostrophes"""
+    return bool(re.match(r"^[a-zA-Z0-9\s\-']+$", name.strip()))
 
 def login_required(f):
     @wraps(f)
@@ -64,6 +69,9 @@ def debug_test_upload():
 
         if not client_name:
             return {'error': 'client_name required'}, 400
+
+        if not is_valid_client_name(client_name):
+            return {'error': 'client_name can only contain letters, numbers, spaces, hyphens, and apostrophes'}, 400
 
         # Debug values
         debug_info = {
@@ -250,6 +258,10 @@ def upload():
 
         if not client_name:
             flash('Client name is required.', 'danger')
+            return redirect(url_for('upload'))
+
+        if not is_valid_client_name(client_name):
+            flash('Client name can only contain letters, numbers, spaces, hyphens, and apostrophes.', 'danger')
             return redirect(url_for('upload'))
 
         # Check file type
