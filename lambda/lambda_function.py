@@ -239,13 +239,17 @@ def extract_document_text(file_bytes, filename):
     return text.strip()[:MAX_ANALYSIS_CHARS]
 
 
-def analyze_document_with_gemini(document_text, max_retries=1):
+def analyze_document_with_gemini(document_text, max_retries=0):
     """Send document text to Google Gemini and return structured legal analysis.
 
-    max_retries and the per-request timeout are kept low (worst case ~27s)
-    to stay under API Gateway's hard 29s integration timeout -- if Gemini
-    doesn't respond in time, the caller should see the real Gemini error,
-    not a generic 504 from API Gateway.
+    A single attempt with a generous timeout is used rather than several
+    short ones: Gemini calls for real documents were observed taking up to
+    ~17s, so a 12s-per-attempt budget with retries was timing out on
+    legitimate (slow, not stuck) responses. One 26s attempt stays under
+    API Gateway's hard 29s integration timeout while giving Gemini enough
+    room to actually finish. Only 429 (rate limit) gets a retry, since
+    that failure mode is fast and worth one extra try; a slow-but-healthy
+    response never should be retried within this same request lifetime.
     """
     prompt = (
         "You are a legal document analyzer. Analyze the provided legal document and "
@@ -269,7 +273,7 @@ def analyze_document_with_gemini(document_text, max_retries=1):
             GEMINI_ENDPOINT,
             params={'key': GEMINI_API_KEY},
             json=payload,
-            timeout=12
+            timeout=26
         )
 
         if response.status_code == 429:
