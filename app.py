@@ -429,7 +429,7 @@ def view_document(document_id):
 
     try:
         composite_key = f"{email}#{document_id}"
-        response = documents_table.get_item(Key={'email': composite_key})
+        response = documents_table.get_item(Key={'email': composite_key, 'document_id': document_id})
         if 'Item' not in response:
             print(f"[VIEW DOC ERROR] Document not found: {document_id}")
             flash('Document not found.', 'danger')
