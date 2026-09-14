@@ -19,9 +19,13 @@ AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 MAX_ANALYSIS_CHARS = 15000
+# gemini-3.6-flash's free tier is capped at 20 requests/DAY per project
+# (GenerateRequestsPerDayPerProjectPerModel-FreeTier), which real usage
+# exhausts quickly. gemini-3.1-flash-lite has a much higher free-tier
+# quota and was verified to handle the same ~15KB document payload.
 GEMINI_ENDPOINT = (
     'https://generativelanguage.googleapis.com/v1beta/models/'
-    'gemini-3.6-flash:generateContent'
+    'gemini-3.1-flash-lite:generateContent'
 )
 
 
@@ -239,17 +243,15 @@ def extract_document_text(file_bytes, filename):
     return text.strip()[:MAX_ANALYSIS_CHARS]
 
 
-def analyze_document_with_gemini(document_text, max_retries=0):
+def analyze_document_with_gemini(document_text, max_retries=1):
     """Send document text to Google Gemini and return structured legal analysis.
 
-    A single attempt with a generous timeout is used rather than several
-    short ones: Gemini calls for real documents were observed taking up to
-    ~17s, so a 12s-per-attempt budget with retries was timing out on
-    legitimate (slow, not stuck) responses. One 26s attempt stays under
-    API Gateway's hard 29s integration timeout while giving Gemini enough
-    room to actually finish. Only 429 (rate limit) gets a retry, since
-    that failure mode is fast and worth one extra try; a slow-but-healthy
-    response never should be retried within this same request lifetime.
+    gemini-3.1-flash-lite responds in ~6-7s for real documents (vs. up to
+    ~17s seen on gemini-3.6-flash before it hit its free-tier daily quota),
+    so there's room for a real retry here: two 12s attempts plus backoff
+    stays well under API Gateway's hard 29s integration timeout, and lets
+    a transient 503 (observed in testing -- the model occasionally reports
+    high demand) recover instead of failing the whole request.
     """
     prompt = (
         "You are a legal document analyzer. Analyze the provided legal document and "
@@ -273,7 +275,7 @@ def analyze_document_with_gemini(document_text, max_retries=0):
             GEMINI_ENDPOINT,
             params={'key': GEMINI_API_KEY},
             json=payload,
-            timeout=26
+            timeout=12
         )
 
         if response.status_code == 429:
