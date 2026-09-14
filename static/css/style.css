@@ -467,6 +467,19 @@ body {
     width: 100%;
 }
 
+.action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.action-buttons .btn {
+    min-width: 90px;
+    text-align: center;
+    white-space: nowrap;
+}
+
 .btn-group {
     display: flex;
     gap: 10px;
