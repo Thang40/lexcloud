@@ -31,14 +31,21 @@
     </div>
 </div>
 
-<!-- Charts -->
-<!-- Contract Types Chart -->
+<!-- Documents by Contract Type: table on the left, chart on the right -->
 <div class="chart-container">
     <div class="chart-title">📊 Documents by Contract Type</div>
-    <canvas id="contractChart"></canvas>
-    <div id="contractLabels" class="chart-bar-labels"></div>
-    <div style="margin-top: 15px; font-size: 13px; color: #666;">
-        <ul id="chartLegend" style="margin: 0; padding-left: 18px;"></ul>
+    <div style="display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 30px; align-items: start;">
+        <table class="table" style="margin: 0;">
+            <thead>
+                <tr><th>Contract Type</th><th>Count</th></tr>
+            </thead>
+            <tbody id="contractTable"></tbody>
+        </table>
+
+        <div>
+            <canvas id="contractChart"></canvas>
+            <div id="contractLabels" class="chart-bar-labels"></div>
+        </div>
     </div>
 </div>
 
@@ -54,11 +61,12 @@ fetch('{{ url_for("analytics_data") }}')
         document.getElementById('processingDocs').textContent = Math.floor(total * 0.10);
         document.getElementById('pendingDocs').textContent = Math.floor(total * 0.05);
 
-        // Update legend
-        const legend = data.contract_types.labels.map((label, i) => {
-            return `<li><strong>${label}:</strong> ${data.contract_types.data[i]} documents</li>`;
+        // Update table
+        const rows = data.contract_types.labels.map((label, i) => {
+            return `<tr><td>${label}</td><td>${data.contract_types.data[i]}</td></tr>`;
         }).join('');
-        document.getElementById('chartLegend').innerHTML = legend || '<li>No data available</li>';
+        document.getElementById('contractTable').innerHTML =
+            rows || '<tr><td colspan="2">No data available</td></tr>';
 
         // Draw Contract Types Bar Chart
         const contractCanvas = document.getElementById('contractChart');
