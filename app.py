@@ -39,6 +39,17 @@ def is_valid_client_name(name):
     """Validate client name - only letters, numbers, spaces, hyphens, apostrophes"""
     return bool(re.match(r"^[a-zA-Z0-9\s\-']+$", name.strip()))
 
+# Fixed order matching the <select> options on the Upload page, so the
+# analytics chart always shows the same 6 columns in the same positions.
+CONTRACT_TYPES = [
+    'NDA',
+    'Employment',
+    'Service Agreement',
+    'Lease Agreement',
+    'Purchase Agreement',
+    'Other'
+]
+
 # Max characters of document text sent to Gemini (keeps prompt + cost bounded)
 MAX_ANALYSIS_CHARS = 15000
 
@@ -712,7 +723,7 @@ def analytics_data():
         documents = all_documents
         print(f"[ANALYTICS API] Found {len(documents)} documents")
 
-        contract_counts = {}
+        contract_counts = {t: 0 for t in CONTRACT_TYPES}
         monthly_counts = {}
 
         for doc in documents:
