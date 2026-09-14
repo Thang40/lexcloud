@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis - {{ doc.get('filename', 'Document') }} - LexCloud{% endblock %}
+
+{% block content %}
+<div class="welcome-section">
+    <h1 class="welcome-title">Document Analysis</h1>
+    <p class="welcome-subtitle">AI-generated summary of {{ doc.get('filename', 'this document') }}</p>
+</div>
+
+<!-- Document Metadata -->
+<div class="card">
+    <div class="card-header">📄 Document Metadata</div>
+    <table class="table">
+        <tr><th style="width: 200px;">File Name</th><td>{{ doc.get('filename', 'N/A') }}</td></tr>
+        <tr><th>Contract Type</th><td>{{ doc.get('contract_type', 'N/A') }}</td></tr>
+        <tr><th>Client Name</th><td>{{ doc.get('client_name', 'N/A') }}</td></tr>
+        <tr><th>Uploaded</th><td>{{ doc.get('uploaded_at', 'N/A')[:10] if doc.get('uploaded_at') else 'N/A' }}</td></tr>
+    </table>
+</div>
+
+{% if analysis %}
+<!-- Risk Indicator -->
+<div class="card">
+    <div class="card-header">⚠️ Risk Level</div>
+    {% set risk = analysis.get('risk_level', 'medium') %}
+    <span class="risk-indicator risk-{{ risk }}">{{ risk|upper }} RISK</span>
+</div>
+
+<!-- Summary -->
+<div class="card">
+    <div class="card-header">📝 Summary</div>
+    <p>{{ analysis.get('summary', 'No summary available.') }}</p>
+</div>
+
+<!-- Key Parties -->
+<div class="card">
+    <div class="card-header">👥 Key Parties / Signatories</div>
+    {% if analysis.get('parties') %}
+    <ul>
+        {% for party in analysis.get('parties') %}
+        <li>{{ party }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color: #666;">No parties identified.</p>
+    {% endif %}
+</div>
+
+<!-- Important Dates -->
+<div class="card">
+    <div class="card-header">📅 Important Dates & Deadlines</div>
+    {% if analysis.get('dates') %}
+    <ul>
+        {% for date in analysis.get('dates') %}
+        <li>{{ date }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color: #666;">No specific dates identified.</p>
+    {% endif %}
+</div>
+
+<!-- Risks -->
+<div class="card">
+    <div class="card-header">🚩 Identified Risks / Problematic Clauses</div>
+    {% if analysis.get('risks') %}
+    <ul>
+        {% for risk_item in analysis.get('risks') %}
+        <li>{{ risk_item }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color: #666;">No risks identified.</p>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align: center; padding: 40px; color: #666;">
+        <p style="font-size: 48px; margin-bottom: 10px;">🤖</p>
+        <p style="font-size: 18px; font-weight: 600;">No analysis available yet</p>
+        <p style="color: #999;">Go back to Documents and click "Analyze" to generate AI insights.</p>
+    </div>
+</div>
+{% endif %}
+
+<a href="{{ url_for('list_documents') }}" class="btn btn-secondary">Back to Documents</a>
+{% endblock %}

@@ -1,4 +1,6 @@
 import os
+import json
+import time
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
 from datetime import datetime
@@ -9,6 +11,9 @@ import boto3
 from functools import wraps
 from collections import defaultdict
 import re
+from openai import OpenAI, RateLimitError, AuthenticationError
+from PyPDF2 import PdfReader
+from docx import Document as DocxDocument
 
 load_dotenv()
 
@@ -19,9 +24,11 @@ app.config['S3_INPUT_BUCKET'] = os.getenv('S3_INPUT_BUCKET')
 app.config['S3_OUTPUT_BUCKET'] = os.getenv('S3_OUTPUT_BUCKET')
 app.config['USERS_TABLE'] = os.getenv('USERS_TABLE', 'users')
 app.config['DOCUMENTS_TABLE'] = os.getenv('DOCUMENTS_TABLE', 'doc')
+app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
 
 s3_client = boto3.client('s3', region_name=app.config['AWS_REGION'])
 dynamodb = boto3.resource('dynamodb', region_name=app.config['AWS_REGION'])
+openai_client = OpenAI(api_key=app.config['OPENAI_API_KEY']) if app.config['OPENAI_API_KEY'] else None
 
 def get_users_table():
     return dynamodb.Table(app.config['USERS_TABLE'])
@@ -32,6 +39,65 @@ def get_documents_table():
 def is_valid_client_name(name):
     """Validate client name - only letters, numbers, spaces, hyphens, apostrophes"""
     return bool(re.match(r"^[a-zA-Z0-9\s\-']+$", name.strip()))
+
+# Max characters of document text sent to OpenAI (keeps prompt + cost bounded)
+MAX_ANALYSIS_CHARS = 15000
+
+def extract_document_text(file_bytes, filename):
+    """Extract plain text from a PDF or DOCX file for OpenAI analysis.
+
+    PDF parsing via PyPDF2 [1] and DOCX parsing via python-docx [2].
+    [1] https://pypdf2.readthedocs.io/
+    [2] https://python-docx.readthedocs.io/
+    """
+    extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+
+    if extension == 'pdf':
+        reader = PdfReader(BytesIO(file_bytes))
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+    elif extension == 'docx':
+        doc = DocxDocument(BytesIO(file_bytes))
+        text = '\n'.join(p.text for p in doc.paragraphs)
+    else:
+        raise ValueError(f'Text extraction not supported for .{extension} files')
+
+    return text.strip()[:MAX_ANALYSIS_CHARS]
+
+def analyze_document_with_openai(document_text, max_retries=2):
+    """Send document text to OpenAI GPT-4 and return structured legal analysis.
+
+    Uses the Chat Completions API with JSON response format [1].
+    [1] https://platform.openai.com/docs/guides/text-generation/json-mode
+    """
+    if not openai_client:
+        raise RuntimeError('OPENAI_API_KEY is not configured')
+
+    system_prompt = (
+        "You are a legal document analyzer. Analyze the provided legal document and "
+        "extract: key parties/signatories, document type, important dates and deadlines, "
+        "identified risks or problematic clauses, and a 2-3 sentence summary. "
+        "Respond ONLY in JSON with keys: parties (array), doc_type (string), "
+        "dates (array), risks (array), summary (string), risk_level (one of 'low', 'medium', 'high')."
+    )
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = openai_client.chat.completions.create(
+                model='gpt-4',
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': f'Document content:\n\n{document_text}'}
+                ],
+                response_format={'type': 'json_object'},
+                temperature=0.2,
+                timeout=25
+            )
+            return json.loads(response.choices[0].message.content)
+        except RateLimitError:
+            if attempt < max_retries:
+                time.sleep(2 ** attempt)
+                continue
+            raise
 
 def login_required(f):
     @wraps(f)
@@ -460,6 +526,123 @@ def view_document(document_id):
     except Exception as e:
         print(f"[VIEW DOC ERROR] {str(e)}")
         flash(f'Failed to retrieve document: {str(e)}', 'danger')
+        return redirect(url_for('list_documents'))
+
+@app.route('/api/analyze-document', methods=['POST'])
+@login_required
+def analyze_document():
+    """Extract text from a document and run OpenAI GPT-4 legal analysis on it."""
+    email = session.get('email')
+    document_id = request.json.get('document_id') if request.is_json else request.form.get('document_id')
+
+    if not document_id:
+        return jsonify({'error': 'document_id is required'}), 400
+
+    if not openai_client:
+        return jsonify({'error': 'OpenAI API key is not configured on the server'}), 503
+
+    documents_table = get_documents_table()
+    composite_key = f"{email}#{document_id}"
+
+    try:
+        response = documents_table.get_item(Key={'email': composite_key, 'document_id': document_id})
+        if 'Item' not in response:
+            return jsonify({'error': 'Document not found'}), 404
+
+        doc = response['Item']
+        if doc.get('user_email') != email:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        documents_table.update_item(
+            Key={'email': composite_key, 'document_id': document_id},
+            UpdateExpression='SET analysis_status = :status',
+            ExpressionAttributeValues={':status': 'pending'}
+        )
+
+        file_obj = s3_client.get_object(Bucket=app.config['S3_INPUT_BUCKET'], Key=doc['s3_key'])
+        file_bytes = file_obj['Body'].read()
+
+        try:
+            document_text = extract_document_text(file_bytes, doc.get('filename', ''))
+        except ValueError as e:
+            documents_table.update_item(
+                Key={'email': composite_key, 'document_id': document_id},
+                UpdateExpression='SET analysis_status = :status',
+                ExpressionAttributeValues={':status': 'failed'}
+            )
+            return jsonify({'error': str(e)}), 400
+
+        if not document_text:
+            documents_table.update_item(
+                Key={'email': composite_key, 'document_id': document_id},
+                UpdateExpression='SET analysis_status = :status',
+                ExpressionAttributeValues={':status': 'failed'}
+            )
+            return jsonify({'error': 'No extractable text found in document'}), 400
+
+        analysis = analyze_document_with_openai(document_text)
+
+        documents_table.update_item(
+            Key={'email': composite_key, 'document_id': document_id},
+            UpdateExpression='SET analysis = :analysis, analysis_status = :status',
+            ExpressionAttributeValues={':analysis': json.dumps(analysis), ':status': 'completed'}
+        )
+
+        print(f"[ANALYZE DOC SUCCESS] {document_id} for {email}")
+        return jsonify({'success': True, 'analysis': analysis}), 200
+
+    except AuthenticationError:
+        print(f"[ANALYZE DOC ERROR] Invalid OpenAI API key")
+        documents_table.update_item(
+            Key={'email': composite_key, 'document_id': document_id},
+            UpdateExpression='SET analysis_status = :status',
+            ExpressionAttributeValues={':status': 'failed'}
+        )
+        return jsonify({'error': 'OpenAI API key is invalid. Please check server configuration.'}), 502
+    except RateLimitError:
+        print(f"[ANALYZE DOC ERROR] OpenAI rate limit exceeded")
+        documents_table.update_item(
+            Key={'email': composite_key, 'document_id': document_id},
+            UpdateExpression='SET analysis_status = :status',
+            ExpressionAttributeValues={':status': 'failed'}
+        )
+        return jsonify({'error': 'OpenAI rate limit reached. Please try again shortly.'}), 429
+    except Exception as e:
+        print(f"[ANALYZE DOC ERROR] {str(e)}")
+        try:
+            documents_table.update_item(
+                Key={'email': composite_key, 'document_id': document_id},
+                UpdateExpression='SET analysis_status = :status',
+                ExpressionAttributeValues={':status': 'failed'}
+            )
+        except Exception:
+            pass
+        return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+
+@app.route('/documents/<document_id>/analysis')
+@login_required
+def view_analysis(document_id):
+    """Render the analysis results page for a document."""
+    email = session.get('email')
+    documents_table = get_documents_table()
+    composite_key = f"{email}#{document_id}"
+
+    try:
+        response = documents_table.get_item(Key={'email': composite_key, 'document_id': document_id})
+        if 'Item' not in response:
+            flash('Document not found.', 'danger')
+            return redirect(url_for('list_documents'))
+
+        doc = response['Item']
+        if doc.get('user_email') != email:
+            flash('Unauthorized.', 'danger')
+            return redirect(url_for('list_documents'))
+
+        analysis = json.loads(doc['analysis']) if doc.get('analysis') else None
+        return render_template('analysis.html', doc=doc, analysis=analysis)
+    except Exception as e:
+        print(f"[VIEW ANALYSIS ERROR] {str(e)}")
+        flash(f'Failed to load analysis: {str(e)}', 'danger')
         return redirect(url_for('list_documents'))
 
 @app.route('/analytics')
