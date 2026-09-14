@@ -64,7 +64,7 @@ def extract_document_text(file_bytes, filename):
 
 GEMINI_ENDPOINT = (
     'https://generativelanguage.googleapis.com/v1beta/models/'
-    'gemini-1.5-flash:generateContent'
+    'gemini-3.6-flash:generateContent'
 )
 
 class GeminiRateLimitError(Exception):
