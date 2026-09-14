@@ -1,6 +1,5 @@
 import os
 import json
-import time
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
 from datetime import datetime
@@ -12,8 +11,6 @@ from functools import wraps
 from collections import defaultdict
 import re
 import requests
-from PyPDF2 import PdfReader
-from docx import Document as DocxDocument
 
 load_dotenv()
 
@@ -24,7 +21,7 @@ app.config['S3_INPUT_BUCKET'] = os.getenv('S3_INPUT_BUCKET')
 app.config['S3_OUTPUT_BUCKET'] = os.getenv('S3_OUTPUT_BUCKET')
 app.config['USERS_TABLE'] = os.getenv('USERS_TABLE', 'users')
 app.config['DOCUMENTS_TABLE'] = os.getenv('DOCUMENTS_TABLE', 'doc')
-app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
+app.config['API_GATEWAY_URL'] = (os.getenv('API_GATEWAY_URL') or '').rstrip('/')
 
 s3_client = boto3.client('s3', region_name=app.config['AWS_REGION'])
 dynamodb = boto3.resource('dynamodb', region_name=app.config['AWS_REGION'])
@@ -49,93 +46,6 @@ CONTRACT_TYPES = [
     'Purchase Agreement',
     'Other'
 ]
-
-# Max characters of document text sent to Gemini (keeps prompt + cost bounded)
-MAX_ANALYSIS_CHARS = 15000
-
-def extract_document_text(file_bytes, filename):
-    """Extract plain text from a PDF or DOCX file for Gemini analysis.
-
-    PDF parsing via PyPDF2 [1] and DOCX parsing via python-docx [2].
-    [1] https://pypdf2.readthedocs.io/
-    [2] https://python-docx.readthedocs.io/
-    """
-    extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-
-    if extension == 'pdf':
-        reader = PdfReader(BytesIO(file_bytes))
-        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
-    elif extension == 'docx':
-        doc = DocxDocument(BytesIO(file_bytes))
-        text = '\n'.join(p.text for p in doc.paragraphs)
-    else:
-        raise ValueError(f'Text extraction not supported for .{extension} files')
-
-    return text.strip()[:MAX_ANALYSIS_CHARS]
-
-GEMINI_ENDPOINT = (
-    'https://generativelanguage.googleapis.com/v1beta/models/'
-    'gemini-3.6-flash:generateContent'
-)
-
-class GeminiRateLimitError(Exception):
-    pass
-
-class GeminiAuthError(Exception):
-    pass
-
-def analyze_document_with_gemini(document_text, max_retries=2):
-    """Send document text to Google Gemini and return structured legal analysis.
-
-    Uses the Gemini REST API with a JSON-constrained response schema [1].
-    [1] https://ai.google.dev/gemini-api/docs/structured-output
-    """
-    if not app.config['GEMINI_API_KEY']:
-        raise RuntimeError('GEMINI_API_KEY is not configured')
-
-    prompt = (
-        "You are a legal document analyzer. Analyze the provided legal document and "
-        "extract: key parties/signatories, document type, important dates and deadlines, "
-        "identified risks or problematic clauses, and a 2-3 sentence summary. "
-        "Respond ONLY in JSON with keys: parties (array), doc_type (string), "
-        "dates (array), risks (array), summary (string), risk_level (one of 'low', 'medium', 'high').\n\n"
-        f"Document content:\n\n{document_text}"
-    )
-
-    payload = {
-        'contents': [{'parts': [{'text': prompt}]}],
-        'generationConfig': {
-            'temperature': 0.2,
-            'responseMimeType': 'application/json'
-        }
-    }
-
-    for attempt in range(max_retries + 1):
-        response = requests.post(
-            GEMINI_ENDPOINT,
-            params={'key': app.config['GEMINI_API_KEY']},
-            json=payload,
-            timeout=25
-        )
-
-        if response.status_code == 429:
-            if attempt < max_retries:
-                time.sleep(2 ** attempt)
-                continue
-            raise GeminiRateLimitError('Gemini rate limit reached')
-
-        if response.status_code in (401, 403):
-            raise GeminiAuthError(response.text)
-
-        if response.status_code in (500, 502, 503, 504):
-            if attempt < max_retries:
-                time.sleep(2 ** attempt)
-                continue
-
-        response.raise_for_status()
-        data = response.json()
-        text = data['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(text)
 
 def login_required(f):
     @wraps(f)
@@ -569,93 +479,35 @@ def view_document(document_id):
 @app.route('/api/analyze-document', methods=['POST'])
 @login_required
 def analyze_document():
-    """Extract text from a document and run Google Gemini legal analysis on it."""
+    """Trigger document analysis via API Gateway -> Lambda -> Gemini.
+
+    Flask no longer talks to Gemini or reads the document from S3 directly;
+    it just forwards {document_id, email} to the API Gateway /analyze
+    endpoint and relays back whatever Lambda returns (result or error).
+    """
     email = session.get('email')
     document_id = request.json.get('document_id') if request.is_json else request.form.get('document_id')
 
     if not document_id:
         return jsonify({'error': 'document_id is required'}), 400
 
-    if not app.config['GEMINI_API_KEY']:
-        return jsonify({'error': 'Gemini API key is not configured on the server'}), 503
-
-    documents_table = get_documents_table()
-    composite_key = f"{email}#{document_id}"
+    if not app.config['API_GATEWAY_URL']:
+        return jsonify({'error': 'API_GATEWAY_URL is not configured on the server'}), 503
 
     try:
-        response = documents_table.get_item(Key={'email': composite_key, 'document_id': document_id})
-        if 'Item' not in response:
-            return jsonify({'error': 'Document not found'}), 404
-
-        doc = response['Item']
-        if doc.get('user_email') != email:
-            return jsonify({'error': 'Unauthorized'}), 403
-
-        documents_table.update_item(
-            Key={'email': composite_key, 'document_id': document_id},
-            UpdateExpression='SET analysis_status = :status',
-            ExpressionAttributeValues={':status': 'pending'}
+        response = requests.post(
+            f"{app.config['API_GATEWAY_URL']}/analyze",
+            json={'document_id': document_id, 'email': email},
+            timeout=30
         )
+        return jsonify(response.json()), response.status_code
 
-        file_obj = s3_client.get_object(Bucket=app.config['S3_INPUT_BUCKET'], Key=doc['s3_key'])
-        file_bytes = file_obj['Body'].read()
-
-        try:
-            document_text = extract_document_text(file_bytes, doc.get('filename', ''))
-        except ValueError as e:
-            documents_table.update_item(
-                Key={'email': composite_key, 'document_id': document_id},
-                UpdateExpression='SET analysis_status = :status',
-                ExpressionAttributeValues={':status': 'failed'}
-            )
-            return jsonify({'error': str(e)}), 400
-
-        if not document_text:
-            documents_table.update_item(
-                Key={'email': composite_key, 'document_id': document_id},
-                UpdateExpression='SET analysis_status = :status',
-                ExpressionAttributeValues={':status': 'failed'}
-            )
-            return jsonify({'error': 'No extractable text found in document'}), 400
-
-        analysis = analyze_document_with_gemini(document_text)
-
-        documents_table.update_item(
-            Key={'email': composite_key, 'document_id': document_id},
-            UpdateExpression='SET analysis = :analysis, analysis_status = :status',
-            ExpressionAttributeValues={':analysis': json.dumps(analysis), ':status': 'completed'}
-        )
-
-        print(f"[ANALYZE DOC SUCCESS] {document_id} for {email}")
-        return jsonify({'success': True, 'analysis': analysis}), 200
-
-    except GeminiAuthError:
-        print(f"[ANALYZE DOC ERROR] Invalid Gemini API key")
-        documents_table.update_item(
-            Key={'email': composite_key, 'document_id': document_id},
-            UpdateExpression='SET analysis_status = :status',
-            ExpressionAttributeValues={':status': 'failed'}
-        )
-        return jsonify({'error': 'Gemini API key is invalid. Please check server configuration.'}), 502
-    except GeminiRateLimitError:
-        print(f"[ANALYZE DOC ERROR] Gemini rate limit exceeded")
-        documents_table.update_item(
-            Key={'email': composite_key, 'document_id': document_id},
-            UpdateExpression='SET analysis_status = :status',
-            ExpressionAttributeValues={':status': 'failed'}
-        )
-        return jsonify({'error': 'Gemini rate limit reached. Please try again shortly.'}), 429
-    except Exception as e:
+    except requests.exceptions.Timeout:
+        print(f"[ANALYZE DOC ERROR] API Gateway request timed out for {document_id}")
+        return jsonify({'error': 'Analysis timed out. Please try again.'}), 504
+    except requests.exceptions.RequestException as e:
         print(f"[ANALYZE DOC ERROR] {str(e)}")
-        try:
-            documents_table.update_item(
-                Key={'email': composite_key, 'document_id': document_id},
-                UpdateExpression='SET analysis_status = :status',
-                ExpressionAttributeValues={':status': 'failed'}
-            )
-        except Exception:
-            pass
-        return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+        return jsonify({'error': f'Analysis failed: {str(e)}'}), 502
 
 @app.route('/documents/<document_id>/analysis')
 @login_required
