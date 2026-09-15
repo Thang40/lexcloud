@@ -19,10 +19,7 @@ AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 MAX_ANALYSIS_CHARS = 15000
-# gemini-3.6-flash's free tier is capped at 20 requests/DAY per project
-# (GenerateRequestsPerDayPerProjectPerModel-FreeTier), which real usage
-# exhausts quickly. gemini-3.1-flash-lite has a much higher free-tier
-# quota and was verified to handle the same ~15KB document payload.
+# flash-lite: gemini-3.6-flash's free tier only allows 20 requests/day
 GEMINI_ENDPOINT = (
     'https://generativelanguage.googleapis.com/v1beta/models/'
     'gemini-3.1-flash-lite:generateContent'
@@ -38,14 +35,8 @@ class GeminiAuthError(Exception):
 
 
 def lambda_handler(event, context):
-    """
-    Two entry points into the same function, distinguished by event shape:
-
-    1. S3 ObjectCreated notification -> update DynamoDB metadata (status,
-       file size, content type). Original behaviour, unchanged.
-    2. API Gateway POST /analyze -> fetch the document from S3, extract
-       text, run Gemini analysis, and store the result in DynamoDB.
-    """
+    # Two triggers share this function: S3 ObjectCreated events (update
+    # metadata) and API Gateway POST /analyze (run Gemini analysis).
     try:
         if 'httpMethod' in event or event.get('requestContext', {}).get('http'):
             return handle_analyze_request(event)
@@ -111,10 +102,7 @@ def lambda_handler(event, context):
 
 
 def extract_email_and_document_id(key):
-    """
-    Extract email and document_id from S3 key format: documents/<email>/<uuid>_<filename>
-    Returns: (email, document_id) or (None, None) if extraction fails
-    """
+    # key format: documents/<email>/<uuid>_<filename>
     try:
         parts = key.split('/')
         if len(parts) >= 3 and parts[0] == 'documents':
@@ -137,15 +125,7 @@ def _json_response(status_code, body_dict):
 
 
 def handle_analyze_request(event):
-    """
-    Handle POST /analyze from API Gateway.
-
-    Expected JSON body: {"document_id": "...", "email": "..."}
-
-    Fetches the document record from DynamoDB, downloads the file from S3,
-    extracts its text, runs Gemini analysis, stores the result back to
-    DynamoDB, and returns the analysis as the HTTP response.
-    """
+    # Body: {"document_id": "...", "email": "..."}
     try:
         body = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
@@ -244,15 +224,8 @@ def extract_document_text(file_bytes, filename):
 
 
 def analyze_document_with_gemini(document_text, max_retries=1):
-    """Send document text to Google Gemini and return structured legal analysis.
-
-    gemini-3.1-flash-lite responds in ~6-7s for real documents (vs. up to
-    ~17s seen on gemini-3.6-flash before it hit its free-tier daily quota),
-    so there's room for a real retry here: two 12s attempts plus backoff
-    stays well under API Gateway's hard 29s integration timeout, and lets
-    a transient 503 (observed in testing -- the model occasionally reports
-    high demand) recover instead of failing the whole request.
-    """
+    # 2 attempts x 12s + backoff stays under API Gateway's 29s timeout,
+    # with room to retry a transient 503 from Gemini.
     prompt = (
         "You are a legal document analyzer. Analyze the provided legal document and "
         "extract: key parties/signatories, document type, important dates and deadlines, "

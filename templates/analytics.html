@@ -75,7 +75,7 @@ fetch('{{ url_for("analytics_data") }}')
     })
     .catch(error => console.error('Error:', error));
 
-// Size a canvas to its displayed CSS size at device pixel ratio for crisp text
+// Match canvas resolution to devicePixelRatio so text stays crisp
 function setupCanvas(canvas) {
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = canvas.clientWidth || 400;
@@ -90,9 +90,7 @@ function setupCanvas(canvas) {
     return ctx;
 }
 
-// Simple Canvas Bar Chart. Bars + values are drawn on the canvas; labels are
-// rendered as HTML below it (evenly spaced, wrapping naturally when long)
-// since canvas text can't wrap and rotated text tends to clip or overlap.
+// Bars are drawn on canvas; labels are separate HTML below (canvas text can't wrap)
 function drawBarChart(ctx, labels, data, labelsContainer) {
     const width = ctx.__cssWidth;
     const height = ctx.__cssHeight;
@@ -113,10 +111,7 @@ function drawBarChart(ctx, labels, data, labelsContainer) {
         return;
     }
 
-    // No side padding: the canvas and the labels container below it are the
-    // same CSS width, so dividing both into N equal columns (0 to width)
-    // keeps every bar aligned with its label without needing two paddings
-    // to stay in sync.
+    // Same column width used for bars and labels, so they stay aligned
     const colWidth = width / labels.length;
     const barWidth = Math.min(60, colWidth - 10);
 

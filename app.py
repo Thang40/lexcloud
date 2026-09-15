@@ -394,12 +394,7 @@ def view_document(document_id):
 @app.route('/api/analyze-document', methods=['POST'])
 @login_required
 def analyze_document():
-    """Trigger document analysis via API Gateway -> Lambda -> Gemini.
-
-    Flask no longer talks to Gemini or reads the document from S3 directly;
-    it just forwards {document_id, email} to the API Gateway /analyze
-    endpoint and relays back whatever Lambda returns (result or error).
-    """
+    # Forwards to API Gateway -> Lambda, which does the actual Gemini call
     email = session.get('email')
     document_id = request.json.get('document_id') if request.is_json else request.form.get('document_id')
 
